@@ -95,8 +95,8 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
         return {"status": "error", "message": "權限不足：你不能更改別人的帳戶！"}
 
     needs_confirm = False
-    if transaction.type in ['deposit', 'withdraw_deposit']: needs_confirm = True
-    elif transaction.type == 'allowance': needs_confirm = True
+    if transaction.type in ['deposit', 'withdraw_deposit', 'allowance']: 
+        needs_confirm = True
 
     status_val = "pending" if needs_confirm else "completed"
 
@@ -128,7 +128,7 @@ def get_pending(user_id: int, db: Session = Depends(get_db)):
             models.Transaction.status == 'pending', models.Transaction.type == 'allowance', models.Transaction.user_id == user.id
         ).all()
         
-    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in pending]
+    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp.isoformat(), "user_name": r.name} for r in pending]
 
 @app.post("/api/confirm/{transaction_id}")
 def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(get_db)):
@@ -170,32 +170,33 @@ def update_balance(user_id: int, actor_id: int, balances: BalanceUpdate, db: Ses
         return {"status": "success"}
     return {"status": "error", "message": "找不到該使用者"}
 
-@app.get("/api/export_db/")
-def export_db(user_id: int, db: Session = Depends(get_db)):
-    return {"status": "error", "message": "已使用雲端 PostgreSQL，請至 Neon 平台備份"}
-
-# ★★★ 修正點：轉換字串為 datetime 物件，以符合 PostgreSQL 要求 ★★★
 @app.get("/api/transactions/")
 def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
     query = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id)
     if user_id > 0: query = query.filter(models.Transaction.user_id == user_id)
     
-    if start_date: 
-        dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
-        query = query.filter(models.Transaction.timestamp >= dt_start)
-    if end_date: 
-        dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
-        query = query.filter(models.Transaction.timestamp <= dt_end)
+    if start_date:
+        try:
+            dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+            query = query.filter(models.Transaction.timestamp >= dt_start)
+        except: pass
+    if end_date:
+        try:
+            dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+            query = query.filter(models.Transaction.timestamp <= dt_end)
+        except: pass
         
     records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(20).all()
-    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in records]
+    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": r.Transaction.timestamp.isoformat(), "user_name": r.name} for r in records]
 
-# ★★★ 修正點：轉換字串為 datetime 物件，以符合 PostgreSQL 要求 ★★★
 @app.get("/api/stats/")
 def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
-    dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
-    dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
-    
+    try:
+        dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+        dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+    except:
+        return {"total_allowance": 0, "total_expense": 0, "daily": {}}
+        
     query = db.query(models.Transaction).filter(
         models.Transaction.user_id == user_id, 
         models.Transaction.status == 'completed', 
