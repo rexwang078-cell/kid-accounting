@@ -83,6 +83,10 @@ class TransactionCreate(BaseModel):
     type: str
     amount: float
     note: str = ""
+    
+class BalanceUpdate(BaseModel):
+    personal_balance: float
+    deposited_balance: float
 
 @app.post("/api/transaction/")
 def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db)):
