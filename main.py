@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import models
 from database import engine, SessionLocal
-from datetime import datetime
+from datetime import datetime, timedelta # 💡 引入了 timedelta 來處理時差
 import os
 
 models.Base.metadata.create_all(bind=engine)
@@ -132,12 +132,12 @@ def get_pending(user_id: int, db: Session = Depends(get_db)):
                 models.Transaction.status == 'pending', models.Transaction.type.in_(['deposit', 'deposit_income'])
             ).all()
         else:
-            # 💡 修改：小孩要確認家長給的「零用錢 (allowance)」與發還的「寄放提領 (withdraw_deposit)」
             pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
                 models.Transaction.status == 'pending', models.Transaction.type.in_(['allowance', 'withdraw_deposit']), models.Transaction.user_id == user.id
             ).all()
             
-        return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp.isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in pending]
+        # 💡 將傳給前端的時間加上 8 小時 (台灣時間)
+        return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": (r.Transaction.timestamp + timedelta(hours=8)).isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in pending]
     except Exception as e:
         print(f"Pending Error: {e}")
         return []
@@ -153,7 +153,6 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
         return {"status": "success"}
 
     target_user = db.query(models.User).filter(models.User.id == t.user_id).first()
-    # ▼▼▼ 已修正這裡的縮排問題 ▼▼▼
     if target_user:
         if t.type == 'deposit':
             target_user.personal_balance -= t.amount
@@ -163,7 +162,7 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
         elif t.type == 'withdraw_deposit':
             target_user.personal_balance += t.amount
             target_user.deposited_balance -= t.amount
-        elif t.type == 'deposit_income': # 💡 新增：打工收入只增加寄放餘額，不扣手邊餘額
+        elif t.type == 'deposit_income':
             target_user.deposited_balance += t.amount
             
     t.status = 'completed'
@@ -191,19 +190,21 @@ def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, en
         query = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id)
         if user_id > 0: query = query.filter(models.Transaction.user_id == user_id)
         
+        # 💡 將前端傳來的台灣時間查詢，扣除 8 小時轉回 UTC 時間向資料庫查詢
         if start_date:
             try:
-                dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+                dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
                 query = query.filter(models.Transaction.timestamp >= dt_start)
             except: pass
         if end_date:
             try:
-                dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+                dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
                 query = query.filter(models.Transaction.timestamp <= dt_end)
             except: pass
             
         records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(20).all()
-        return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": r.Transaction.timestamp.isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in records]
+        # 💡 傳回前端前，再加上 8 小時
+        return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": (r.Transaction.timestamp + timedelta(hours=8)).isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in records]
     except Exception as e:
         print(f"Transactions Error: {e}")
         return []
@@ -215,8 +216,8 @@ def get_all_users(db: Session = Depends(get_db)):
 @app.get("/api/stats/")
 def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
     try:
-        dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
-        dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+        dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
+        dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
         
         query = db.query(models.Transaction).filter(
             models.Transaction.user_id == user_id, 
@@ -229,7 +230,10 @@ def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depend
         total_expense, total_allowance = 0, 0
         for t in transactions:
             if not t.timestamp: continue
-            d = t.timestamp.strftime("%Y-%m-%d")
+            # 💡 統計每天數據時，也必須轉回台灣時間才不會跨錯天
+            local_time = t.timestamp + timedelta(hours=8)
+            d = local_time.strftime("%Y-%m-%d")
+            
             if d not in daily_stats: daily_stats[d] = {"income": 0, "expense": 0}
             if t.type == 'expense': daily_stats[d]["expense"] += t.amount; total_expense += t.amount
             elif t.type in ['allowance', 'withdraw_deposit', 'deposit_income']: daily_stats[d]["income"] += t.amount; total_allowance += t.amount
