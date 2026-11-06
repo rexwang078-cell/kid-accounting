@@ -97,7 +97,7 @@
                             </select>
                             <select class="form-select" id="typeParent" style="display: none;">
                                 <option value="allowance">給零用錢 (需小孩確認收下)</option>
-                                <option value="withdraw_deposit">領取寄放的錢 (需家長確認發出)</option>
+                                <option value="withdraw_deposit">領取寄放的錢 (需小孩確認收到)</option>
                             </select>
                         </div>
                         <div class="mb-3"><label class="form-label text-muted">金額</label><input type="number" class="form-control form-control-lg" id="recordAmount" placeholder="NT$ 0" required></div>
@@ -141,37 +141,69 @@
             eb.innerText = "系統錯誤: " + msg;
         }
 
-        // 確保 script 區塊有被執行到的保險機制
-        console.log("✅ 網頁腳本區塊已成功載入解析！");
-
-        // 將原本的 window.onload 改成獨立函式
         async function initApp() {
             try {
-                console.log("進度 1：準備啟動 LINE SDK");
                 await liff.init({ liffId: MY_LIFF_ID });
-                
-                console.log("進度 2：LINE SDK 啟動成功，檢查登入狀態");
                 if (!liff.isLoggedIn()) { 
-                    console.log("進度 3：未登入，即將跳轉驗證畫面");
                     liff.login(); 
                     return; 
                 }
-                
-                console.log("進度 4：已登入，正在抓取您的 LINE 帳號資料");
                 lineProfile = await liff.getProfile();
-                
-                console.log("進度 5：資料抓取成功，連線至記帳本伺服器...");
                 checkAuth();
             } catch (err) { 
-                console.error("⚠️ 發生錯誤：" + err.message);
                 showAppError("LINE 初始化失敗：" + err.message); 
             }
         }
 
-        // 使用 DOMContentLoaded 確保在 HTML 載入完畢後立刻執行，避免被其他套件覆蓋
         document.addEventListener("DOMContentLoaded", () => {
-            console.log("✅ DOM 載入完畢，開始執行 initApp...");
             initApp();
+
+            // ★★★ 新增：攔截表單送出，改用背景 API 呼叫，防止網頁重整 ★★★
+            document.getElementById('recordForm').addEventListener('submit', async (e) => {
+                e.preventDefault(); // 阻止原本的網頁重整行為
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = true;
+                submitBtn.innerText = "⏳ 處理中...";
+
+                try {
+                    const tId = isParent ? document.getElementById('targetChild').value : loggedInUser.id;
+                    const type = isParent ? document.getElementById('typeParent').value : document.getElementById('typeChild').value;
+                    const amount = parseFloat(document.getElementById('recordAmount').value);
+                    const note = document.getElementById('recordNote').value;
+
+                    if (!amount || amount <= 0) {
+                        alert("請輸入大於 0 的金額");
+                        return;
+                    }
+
+                    const res = await fetch('/api/transaction/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: parseInt(tId),
+                            actor_id: loggedInUser.id,
+                            type: type,
+                            amount: amount,
+                            note: note
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        alert(data.message); // 顯示成功訊息 (例如：等待確認中 或 記帳成功)
+                        document.getElementById('recordAmount').value = '';
+                        document.getElementById('recordNote').value = '';
+                        setupApp(); // 刷新畫面與餘額
+                    } else {
+                        alert("錯誤：" + data.message);
+                    }
+                } catch(err) {
+                    alert("連線發生錯誤：" + err.message);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "確認送出";
+                }
+            });
         });
 
         async function checkAuth() {
@@ -284,7 +316,7 @@
                 if(pending.length > 0) {
                     box.style.display = 'block';
                     list.innerHTML = pending.map(p => {
-                        const tMap = { 'deposit': '存入寄放', 'allowance': '家長給零用錢', 'withdraw_deposit': '提領寄放' };
+                        const tMap = { 'deposit': '存入寄放', 'allowance': '家長發零用錢', 'withdraw_deposit': '提領寄放' };
                         return `<li class="list-group-item"><div class="fw-bold mb-1">${p.user_name} - ${tMap[p.type]} $${p.amount}</div><div class="d-flex justify-content-between align-items-center"><div class="text-muted small">${p.note || '無備註'}</div><div><button class="btn btn-sm btn-success me-1" onclick="confirmTx(${p.id}, 'approve')">✅ 收到</button><button class="btn btn-sm btn-danger" onclick="confirmTx(${p.id}, 'reject')">❌ 拒絕</button></div></div></li>`;
                     }).join('');
                 } else { box.style.display = 'none'; }
