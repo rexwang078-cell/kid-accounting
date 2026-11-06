@@ -7,8 +7,10 @@ from sqlalchemy.orm import sessionmaker
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./kid_accounting.db")
 
 # 修正 SQLAlchemy 對 postgres:// 協定的相容性問題
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"):
+    # 強制將開頭替換為 postgresql+psycopg://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 # 判斷連線方式
 if "sqlite" in DATABASE_URL:
