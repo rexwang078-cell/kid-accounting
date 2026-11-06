@@ -128,12 +128,14 @@ def get_pending(user_id: int, db: Session = Depends(get_db)):
         if not user: return []
         
         if user.role == 'parent':
+            # 💡 修改：家長只確認小孩「存入寄放 (deposit)」的錢
             pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
-                models.Transaction.status == 'pending', models.Transaction.type.in_(['deposit', 'withdraw_deposit'])
+                models.Transaction.status == 'pending', models.Transaction.type == 'deposit'
             ).all()
         else:
+            # 💡 修改：小孩要確認家長給的「零用錢 (allowance)」與發還的「寄放提領 (withdraw_deposit)」
             pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
-                models.Transaction.status == 'pending', models.Transaction.type == 'allowance', models.Transaction.user_id == user.id
+                models.Transaction.status == 'pending', models.Transaction.type.in_(['allowance', 'withdraw_deposit']), models.Transaction.user_id == user.id
             ).all()
             
         return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp.isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in pending]
