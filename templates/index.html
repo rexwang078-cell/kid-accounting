@@ -33,10 +33,12 @@
                 </div>
             </div>
 
+            <!-- 切換選單 -->
             <div id="childViewSwitcher" class="mb-3" style="display: none;">
                 <select id="viewingChild" class="form-select border-info text-info fw-bold bg-info bg-opacity-10"></select>
             </div>
 
+            <!-- 小孩專屬：狀態與統計 -->
             <div id="childDashboard" style="display: none;">
                 <div class="card shadow-sm mb-3 border-info">
                     <div class="card-body p-3 text-center">
@@ -53,15 +55,32 @@
                         </div>
                     </div>
                 </div>
-                <!-- 統計圖表 (省略顯示節省空間，功能皆保留) -->
-                <div class="card shadow-sm mb-4"><div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="text-secondary fw-bold m-0">📊 收支統計 (已完成)</h6><div><button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(7)">近 7 天</button><button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(30)">近 30 天</button></div></div>
-                    <div class="d-flex gap-2 mb-3"><input type="date" id="statStartDate" class="form-control form-control-sm"><span class="align-self-center">~</span><input type="date" id="statEndDate" class="form-control form-control-sm"><button class="btn btn-sm btn-primary" onclick="loadStats()">查詢</button></div>
-                    <div class="row text-center mb-2"><div class="col-6"><small class="text-muted">期間獲得</small><h6 class="text-primary mb-0" id="statIn">$0</h6></div><div class="col-6"><small class="text-muted">期間花費</small><h6 class="text-danger mb-0" id="statOut">$0</h6></div></div>
-                    <canvas id="statsChart" width="100%" height="60"></canvas>
-                </div></div>
+                
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="text-secondary fw-bold m-0">📊 收支統計 (已完成)</h6>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(7)">近 7 天</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(30)">近 30 天</button>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mb-3">
+                            <input type="date" id="statStartDate" class="form-control form-control-sm">
+                            <span class="align-self-center">~</span>
+                            <input type="date" id="statEndDate" class="form-control form-control-sm">
+                            <button class="btn btn-sm btn-primary" onclick="loadStats()">查詢</button>
+                        </div>
+                        <div class="row text-center mb-2">
+                            <div class="col-6"><small class="text-muted">期間獲得</small><h6 class="text-primary mb-0" id="statIn">$0</h6></div>
+                            <div class="col-6"><small class="text-muted">期間花費</small><h6 class="text-danger mb-0" id="statOut">$0</h6></div>
+                        </div>
+                        <canvas id="statsChart" width="100%" height="60"></canvas>
+                    </div>
+                </div>
             </div>
 
+            <!-- 家長專屬：代管總覽 -->
             <div id="parentDashboard" class="card shadow-sm mb-4 border-primary" style="display: none; background-color: #eef2ff;">
                 <div class="card-body">
                     <h5 class="card-title text-primary text-center mb-3">🛡️ 兒童帳戶總覽</h5>
@@ -69,10 +88,14 @@
                 </div>
             </div>
             
+            <!-- 表單區塊 -->
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <form id="recordForm">
-                        <div class="mb-3" id="targetChildDiv" style="display: none;"><label class="form-label text-muted">發放對象</label><select class="form-select" id="targetChild"></select></div>
+                        <div class="mb-3" id="targetChildDiv" style="display: none;">
+                            <label class="form-label text-muted">發放對象</label>
+                            <select class="form-select" id="targetChild"></select>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label text-muted">動作</label>
                             <select class="form-select" id="typeChild">
@@ -91,12 +114,13 @@
                 </div>
             </div>
             
-            <!-- ★ 新增：待確認任務區塊 -->
+            <!-- 待確認任務區塊 -->
             <div id="pendingSection" class="mb-4" style="display: none;">
                 <h5 class="text-warning m-0 mb-2">🔔 待確認任務</h5>
                 <ul class="list-group" id="pendingList"></ul>
             </div>
 
+            <!-- 流水帳 -->
             <div class="mb-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="text-secondary m-0">📋 近期紀錄</h5>
@@ -119,24 +143,26 @@
                 if (!liff.isLoggedIn()) { liff.login(); return; }
                 lineProfile = await liff.getProfile();
                 checkAuth();
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error(err); alert("LINE 初始化失敗，請確認 LIFF ID"); }
         };
 
         async function checkAuth() {
-            const res = await fetch(`/api/auth/${lineProfile.userId}`);
-            const data = await res.json();
-            if (data.status === 'unbound') {
-                document.getElementById('loadingSpinner').style.display = 'none';
-                document.getElementById('authMessage').style.display = 'none';
-                document.getElementById('bindSection').style.display = 'block';
-                loadUnboundUsers();
-            } else {
-                loggedInUser = data; isParent = (loggedInUser.role === 'parent');
-                document.getElementById('authSection').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
-                document.getElementById('loggedInName').innerText = `👤 ${loggedInUser.name}`;
-                setupApp();
-            }
+            try {
+                const res = await fetch(`/api/auth/${lineProfile.userId}`);
+                const data = await res.json();
+                if (data.status === 'unbound') {
+                    document.getElementById('loadingSpinner').style.display = 'none';
+                    document.getElementById('authMessage').style.display = 'none';
+                    document.getElementById('bindSection').style.display = 'block';
+                    loadUnboundUsers();
+                } else {
+                    loggedInUser = data; isParent = (loggedInUser.role === 'parent');
+                    document.getElementById('authSection').style.display = 'none';
+                    document.getElementById('mainApp').style.display = 'block';
+                    document.getElementById('loggedInName').innerText = `👤 ${loggedInUser.name}`;
+                    setupApp();
+                }
+            } catch(e) { console.error(e); }
         }
 
         async function loadUnboundUsers() {
@@ -160,79 +186,86 @@
         }
 
         async function setupApp() {
-            const allRes = await fetch('/api/users/');
-            allKids = (await allRes.json()).filter(u => u.role === 'child');
-            document.getElementById('parentDashboard').style.display = isParent ? 'block' : 'none';
-            document.getElementById('targetChildDiv').style.display = isParent ? 'block' : 'none';
-            document.getElementById('typeParent').style.display = isParent ? 'block' : 'none';
-            document.getElementById('typeChild').style.display = isParent ? 'none' : 'block';
-            
-            if (isParent) {
-                document.getElementById('targetChild').innerHTML = allKids.map(k => `<option value="${k.id}">👦 ${k.name}</option>`).join('');
-                document.getElementById('kidsBalances').innerHTML = allKids.map(k => `
-                    <div class="col-6 border-end pb-2"><h6 class="text-secondary mb-1">${k.name}</h6>
-                    <div class="${k.personal_balance < 0 ? 'text-danger fw-bold' : 'text-dark'}">手邊: $${k.personal_balance}</div>
-                    <div class="text-success fw-bold">寄放: $${k.deposited_balance}</div>
-                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="editBalance(${k.id}, '${k.name}', ${k.personal_balance}, ${k.deposited_balance})">⚙️ 設定</button></div>`).join('');
-                if(!document.getElementById('listStartDate').value) setListDate(7, false);
-                loadList(true);
-                loadPending();
-            } else {
-                document.getElementById('childDashboard').style.display = 'block';
-                const switcherBox = document.getElementById('childViewSwitcher');
-                const switcher = document.getElementById('viewingChild');
-                switcherBox.style.display = 'block';
-                switcher.innerHTML = allKids.map(k => `<option value="${k.id}" ${k.id === loggedInUser.id ? 'selected' : ''}>${k.id === loggedInUser.id ? '📍 我的帳本' : '👀 查看 '+k.name+' 的帳本'}</option>`).join('');
-                switcher.addEventListener('change', refreshChildView);
-                refreshChildView();
+            try {
+                const allRes = await fetch('/api/users/');
+                allKids = (await allRes.json()).filter(u => u.role === 'child');
+                document.getElementById('parentDashboard').style.display = isParent ? 'block' : 'none';
+                document.getElementById('targetChildDiv').style.display = isParent ? 'block' : 'none';
+                document.getElementById('typeParent').style.display = isParent ? 'block' : 'none';
+                document.getElementById('typeChild').style.display = isParent ? 'none' : 'block';
+                
+                if (isParent) {
+                    document.getElementById('targetChild').innerHTML = allKids.map(k => `<option value="${k.id}">👦 ${k.name}</option>`).join('');
+                    document.getElementById('kidsBalances').innerHTML = allKids.map(k => `
+                        <div class="col-6 border-end pb-2"><h6 class="text-secondary mb-1">${k.name}</h6>
+                        <div class="${k.personal_balance < 0 ? 'text-danger fw-bold' : 'text-dark'}">手邊: $${k.personal_balance}</div>
+                        <div class="text-success fw-bold">寄放: $${k.deposited_balance}</div>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="editBalance(${k.id}, '${k.name}', ${k.personal_balance}, ${k.deposited_balance})">⚙️ 設定</button></div>`).join('');
+                    if(!document.getElementById('listStartDate').value) setListDate(7, false);
+                    loadList(true);
+                    loadPending();
+                } else {
+                    document.getElementById('childDashboard').style.display = 'block';
+                    const switcherBox = document.getElementById('childViewSwitcher');
+                    const switcher = document.getElementById('viewingChild');
+                    switcherBox.style.display = 'block';
+                    switcher.innerHTML = allKids.map(k => `<option value="${k.id}" ${k.id === loggedInUser.id ? 'selected' : ''}>${k.id === loggedInUser.id ? '📍 我的帳本' : '👀 查看 '+k.name+' 的帳本'}</option>`).join('');
+                    switcher.addEventListener('change', refreshChildView);
+                    refreshChildView();
+                }
+            } catch (e) {
+                console.error("載入失敗", e);
             }
         }
 
         function refreshChildView() {
-            const targetId = parseInt(document.getElementById('viewingChild').value);
-            const targetUser = allKids.find(k => k.id === targetId);
-            const isMe = (targetId === loggedInUser.id);
-            document.getElementById('childNameTitle').innerText = `👤 ${targetUser.name}`;
-            document.getElementById('personalBalance').innerText = `$${targetUser.personal_balance}`;
-            document.getElementById('depositedBalance').innerText = `$${targetUser.deposited_balance}`;
-            document.getElementById('recordAmount').disabled = !isMe;
-            document.getElementById('recordNote').disabled = !isMe;
-            document.getElementById('typeChild').disabled = !isMe;
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = !isMe; submitBtn.innerText = isMe ? '確認送出' : '🚫 僅供查看';
-            
-            if(!document.getElementById('statStartDate').value) setStatsDate(7, false); else loadStats();
-            if(!document.getElementById('listStartDate').value) setListDate(7, false);
-            loadList(true);
-            loadPending();
+            try {
+                const targetId = parseInt(document.getElementById('viewingChild').value);
+                const targetUser = allKids.find(k => k.id === targetId);
+                const isMe = (targetId === loggedInUser.id);
+                document.getElementById('childNameTitle').innerText = `👤 ${targetUser.name}`;
+                document.getElementById('personalBalance').innerText = `$${targetUser.personal_balance}`;
+                document.getElementById('depositedBalance').innerText = `$${targetUser.deposited_balance}`;
+                document.getElementById('recordAmount').disabled = !isMe;
+                document.getElementById('recordNote').disabled = !isMe;
+                document.getElementById('typeChild').disabled = !isMe;
+                const submitBtn = document.getElementById('submitBtn');
+                submitBtn.disabled = !isMe; submitBtn.innerText = isMe ? '確認送出' : '🚫 僅供查看';
+                
+                if(!document.getElementById('statStartDate').value) setStatsDate(7, false); else loadStats();
+                if(!document.getElementById('listStartDate').value) setListDate(7, false);
+                loadList(true);
+                loadPending();
+            } catch (e) { console.error(e); }
         }
 
-        // ★ 載入與處理待確認任務
         async function loadPending() {
             const targetId = isParent ? loggedInUser.id : document.getElementById('viewingChild').value;
             if(!isParent && targetId != loggedInUser.id) {
                 document.getElementById('pendingSection').style.display = 'none'; return;
             }
-            const res = await fetch(`/api/pending/${loggedInUser.id}`);
-            const pending = await res.json();
-            const box = document.getElementById('pendingSection');
-            const list = document.getElementById('pendingList');
-            if(pending.length > 0) {
-                box.style.display = 'block';
-                list.innerHTML = pending.map(p => {
-                    const tMap = { 'deposit': '存入寄放', 'allowance': '家長給零用錢', 'withdraw_deposit': '提領寄放' };
-                    return `<li class="list-group-item">
-                        <div class="fw-bold mb-1">${p.user_name} - ${tMap[p.type]} $${p.amount}</div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="text-muted small">${p.note || '無備註'}</div>
-                            <div>
-                                <button class="btn btn-sm btn-success me-1" onclick="confirmTx(${p.id}, 'approve')">✅ 收到</button>
-                                <button class="btn btn-sm btn-danger" onclick="confirmTx(${p.id}, 'reject')">❌ 拒絕</button>
+            try {
+                const res = await fetch(`/api/pending/${loggedInUser.id}`);
+                const pending = await res.json();
+                const box = document.getElementById('pendingSection');
+                const list = document.getElementById('pendingList');
+                if(pending.length > 0) {
+                    box.style.display = 'block';
+                    list.innerHTML = pending.map(p => {
+                        const tMap = { 'deposit': '存入寄放', 'allowance': '家長給零用錢', 'withdraw_deposit': '提領寄放' };
+                        return `<li class="list-group-item">
+                            <div class="fw-bold mb-1">${p.user_name} - ${tMap[p.type]} $${p.amount}</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted small">${p.note || '無備註'}</div>
+                                <div>
+                                    <button class="btn btn-sm btn-success me-1" onclick="confirmTx(${p.id}, 'approve')">✅ 收到</button>
+                                    <button class="btn btn-sm btn-danger" onclick="confirmTx(${p.id}, 'reject')">❌ 拒絕</button>
+                                </div>
                             </div>
-                        </div>
-                    </li>`;
-                }).join('');
-            } else { box.style.display = 'none'; }
+                        </li>`;
+                    }).join('');
+                } else { box.style.display = 'none'; }
+            } catch (e) { console.error(e); }
         }
 
         async function confirmTx(id, action) {
@@ -265,41 +298,50 @@
 
         async function loadStats() {
             if(isParent) return; 
-            const targetId = parseInt(document.getElementById('viewingChild').value);
-            const start = document.getElementById('statStartDate').value, end = document.getElementById('statEndDate').value;
-            const stats = await (await fetch(`/api/stats/?user_id=${targetId}&start_date=${start}&end_date=${end}`)).json();
-            document.getElementById('statIn').innerText = `$${stats.total_allowance}`; document.getElementById('statOut').innerText = `$${stats.total_expense}`;
-            const ctx = document.getElementById('statsChart').getContext('2d');
-            let labels = [], incomeData = [], expenseData = [], curr = new Date(start);
-            while(curr <= new Date(end)) {
-                const dStr = formatDate(curr); labels.push(dStr.substring(5)); 
-                incomeData.push(stats.daily[dStr] ? stats.daily[dStr].income : 0); expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
-                curr.setDate(curr.getDate() + 1);
-            }
-            if(chartInstance) chartInstance.destroy(); 
-            chartInstance = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: '獲得', data: incomeData, backgroundColor: '#36A2EB' }, { label: '花費', data: expenseData, backgroundColor: '#FF6384' }] }, options: { responsive: true, scales: { y: { beginAtZero: true } } } });
+            try {
+                const targetId = parseInt(document.getElementById('viewingChild').value);
+                const start = document.getElementById('statStartDate').value, end = document.getElementById('statEndDate').value;
+                const stats = await (await fetch(`/api/stats/?user_id=${targetId}&start_date=${start}&end_date=${end}`)).json();
+                document.getElementById('statIn').innerText = `$${stats.total_allowance}`; document.getElementById('statOut').innerText = `$${stats.total_expense}`;
+                const ctx = document.getElementById('statsChart').getContext('2d');
+                let labels = [], incomeData = [], expenseData = [], curr = new Date(start);
+                while(curr <= new Date(end)) {
+                    const dStr = formatDate(curr); labels.push(dStr.substring(5)); 
+                    incomeData.push(stats.daily[dStr] ? stats.daily[dStr].income : 0); expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
+                    curr.setDate(curr.getDate() + 1);
+                }
+                if(chartInstance) chartInstance.destroy(); 
+                chartInstance = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: '獲得', data: incomeData, backgroundColor: '#36A2EB' }, { label: '花費', data: expenseData, backgroundColor: '#FF6384' }] }, options: { responsive: true, scales: { y: { beginAtZero: true } } } });
+            } catch (e) { console.error(e); }
         }
 
         async function loadList(reset = true) {
-            const listUid = isParent ? 0 : document.getElementById('viewingChild').value;
-            const start = document.getElementById('listStartDate').value, end = document.getElementById('listEndDate').value;
-            let url = `/api/transactions/?user_id=${listUid}&skip=${reset ? 0 : currentLoadedCount}`;
-            if(start) url += `&start_date=${start}`; if(end) url += `&end_date=${end}`;
-            const records = await (await fetch(url)).json();
-            
-            const listElement = document.getElementById('transactionList');
-            if(reset) { listElement.innerHTML = ''; currentLoadedCount = 0; }
-            if(reset && records.length === 0) listElement.innerHTML = '<li class="list-group-item text-center text-muted">無紀錄</li>';
-            
-            const typeMap = { 'expense': { l: '支出', b: 'bg-danger', s: '-' }, 'deposit': { l: '存入寄放', b: 'bg-success', s: '+' }, 'allowance': { l: '獲零用錢', b: 'bg-primary', s: '+' }, 'withdraw_deposit': { l: '提領寄放', b: 'bg-warning text-dark', s: '+' }, 'adjustment': { l: '系統校正', b: 'bg-secondary', s: '' } };
-            records.forEach(r => {
-                const t = typeMap[r.type], d = new Date(r.timestamp + 'Z'), timeStr = d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-                const nameBadge = isParent ? `<span class="badge bg-info text-dark me-2">👤 ${r.user_name}</span>` : '';
-                const statusBadge = r.status === 'pending' ? '<span class="badge bg-warning text-dark me-1">待確認</span>' : (r.status === 'rejected' ? '<span class="badge bg-secondary me-1">已拒絕</span>' : '');
-                listElement.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center"><div class="ms-2 me-auto"><div class="fw-bold mb-1">${statusBadge}${nameBadge}<span class="badge ${t.b}">${t.l}</span> ${r.note || ''}</div><div class="text-muted" style="font-size: 0.85em;">🕒 ${timeStr}</div></div><span class="fs-5 fw-semibold ${r.type==='expense'?'text-danger':'text-success'}">${r.type==='adjustment'?'':t.s+' $'+r.amount}</span></li>`;
-            });
-            currentLoadedCount += records.length;
-            document.getElementById('loadMoreBtn').style.display = records.length === 20 ? 'inline-block' : 'none';
+            try {
+                const listUid = isParent ? 0 : document.getElementById('viewingChild').value;
+                const start = document.getElementById('listStartDate').value, end = document.getElementById('listEndDate').value;
+                let url = `/api/transactions/?user_id=${listUid}&skip=${reset ? 0 : currentLoadedCount}`;
+                if(start) url += `&start_date=${start}`; if(end) url += `&end_date=${end}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Server response not ok");
+                const records = await res.json();
+                
+                const listElement = document.getElementById('transactionList');
+                if(reset) { listElement.innerHTML = ''; currentLoadedCount = 0; }
+                if(reset && records.length === 0) listElement.innerHTML = '<li class="list-group-item text-center text-muted">無紀錄</li>';
+                
+                const typeMap = { 'expense': { l: '支出', b: 'bg-danger', s: '-' }, 'deposit': { l: '存入寄放', b: 'bg-success', s: '+' }, 'allowance': { l: '獲零用錢', b: 'bg-primary', s: '+' }, 'withdraw_deposit': { l: '提領寄放', b: 'bg-warning text-dark', s: '+' }, 'adjustment': { l: '系統校正', b: 'bg-secondary', s: '' } };
+                records.forEach(r => {
+                    const t = typeMap[r.type], d = new Date(r.timestamp), timeStr = d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+                    const nameBadge = isParent ? `<span class="badge bg-info text-dark me-2">👤 ${r.user_name}</span>` : '';
+                    const statusBadge = r.status === 'pending' ? '<span class="badge bg-warning text-dark me-1">待確認</span>' : (r.status === 'rejected' ? '<span class="badge bg-secondary me-1">已拒絕</span>' : '');
+                    listElement.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center"><div class="ms-2 me-auto"><div class="fw-bold mb-1">${statusBadge}${nameBadge}<span class="badge ${t.b}">${t.l}</span> ${r.note || ''}</div><div class="text-muted" style="font-size: 0.85em;">🕒 ${timeStr}</div></div><span class="fs-5 fw-semibold ${r.type==='expense'?'text-danger':'text-success'}">${r.type==='adjustment'?'':t.s+' $'+r.amount}</span></li>`;
+                });
+                currentLoadedCount += records.length;
+                document.getElementById('loadMoreBtn').style.display = records.length === 20 ? 'inline-block' : 'none';
+            } catch (e) {
+                console.error(e);
+                document.getElementById('transactionList').innerHTML = '<li class="list-group-item text-danger text-center">讀取失敗，請重新整理網頁</li>';
+            }
         }
 
         document.getElementById('loadMoreBtn').addEventListener('click', () => loadList(false));
