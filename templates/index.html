@@ -11,7 +11,7 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- 萬用錯誤警告區塊 (幫助我們抓蟲) -->
+        <!-- 萬用錯誤警告區塊 -->
         <div id="errorBanner" class="alert alert-danger" style="display: none; font-weight: bold;"></div>
 
         <div id="authSection" class="text-center py-5">
@@ -112,9 +112,19 @@
                 <ul class="list-group" id="pendingList"></ul>
             </div>
 
+            <!-- ★★★ 補回之前不小心漏掉的近期紀錄日期篩選框 ★★★ -->
             <div class="mb-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="text-secondary m-0">📋 近期紀錄</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="setListDate(7)">近 7 天</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="setListDate(30)">近 30 天</button>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <input type="date" id="listStartDate" class="form-control form-control-sm">
+                    <input type="date" id="listEndDate" class="form-control form-control-sm">
+                    <button class="btn btn-sm btn-secondary" onclick="loadList(true)">篩選</button>
                 </div>
                 <ul class="list-group" id="transactionList"></ul>
                 <div class="text-center mt-3"><button id="loadMoreBtn" class="btn btn-outline-secondary btn-sm" style="display: none;">⬇️ 載入更多</button></div>
@@ -334,20 +344,3 @@
                 document.getElementById('loadMoreBtn').style.display = records.length === 20 ? 'inline-block' : 'none';
             } catch (e) { showAppError("讀取紀錄失敗: " + e.message); }
         }
-
-        document.getElementById('loadMoreBtn').addEventListener('click', () => loadList(false));
-        document.getElementById('recordForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const target_id = isParent ? document.getElementById('targetChild').value : loggedInUser.id;
-            const type = isParent ? document.getElementById('typeParent').value : document.getElementById('typeChild').value;
-            const res = await fetch('/api/transaction/', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: parseInt(target_id), actor_id: loggedInUser.id, type: type, amount: parseFloat(document.getElementById('recordAmount').value), note: document.getElementById('recordNote').value })
-            });
-            const data = await res.json();
-            alert(data.message);
-            if (data.status === 'success') { document.getElementById('recordForm').reset(); setupApp(); }
-        });
-    </script>
-</body>
-</html>
