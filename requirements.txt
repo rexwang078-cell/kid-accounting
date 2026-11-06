@@ -3,3 +3,4 @@ uvicorn
 sqlalchemy
 pydantic
 jinja2
+psycopg2-binary
