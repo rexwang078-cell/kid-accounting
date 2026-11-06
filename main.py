@@ -100,7 +100,7 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
             return {"status": "error", "message": "權限不足：你不能更改別人的帳戶！"}
 
         needs_confirm = False
-        if transaction.type in ['deposit', 'withdraw_deposit', 'allowance']: 
+        if transaction.type in ['deposit', 'withdraw_deposit', 'allowance', 'deposit_income']: 
             needs_confirm = True
 
         status_val = "pending" if needs_confirm else "completed"
@@ -128,9 +128,8 @@ def get_pending(user_id: int, db: Session = Depends(get_db)):
         if not user: return []
         
         if user.role == 'parent':
-            # 💡 修改：家長只確認小孩「存入寄放 (deposit)」的錢
             pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
-                models.Transaction.status == 'pending', models.Transaction.type == 'deposit'
+                models.Transaction.status == 'pending', models.Transaction.type.in_(['deposit', 'deposit_income'])
             ).all()
         else:
             # 💡 修改：小孩要確認家長給的「零用錢 (allowance)」與發還的「寄放提領 (withdraw_deposit)」
@@ -154,15 +153,17 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
         return {"status": "success"}
 
     target_user = db.query(models.User).filter(models.User.id == t.user_id).first()
-    if target_user:
-        if t.type == 'deposit':
-            target_user.personal_balance -= t.amount
-            target_user.deposited_balance += t.amount
-        elif t.type == 'allowance':
-            target_user.personal_balance += t.amount
-        elif t.type == 'withdraw_deposit':
-            target_user.personal_balance += t.amount
-            target_user.deposited_balance -= t.amount
+if target_user:
+    if t.type == 'deposit':
+        target_user.personal_balance -= t.amount
+        target_user.deposited_balance += t.amount
+    elif t.type == 'allowance':
+        target_user.personal_balance += t.amount
+    elif t.type == 'withdraw_deposit':
+        target_user.personal_balance += t.amount
+        target_user.deposited_balance -= t.amount
+    elif t.type == 'deposit_income': # 💡 新增：打工收入只增加寄放餘額，不扣手邊餘額
+        target_user.deposited_balance += t.amount
             
     t.status = 'completed'
     db.commit()
