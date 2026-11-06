@@ -65,6 +65,16 @@ def bind_user(req: BindRequest, db: Session = Depends(get_db)):
         return {"status": "success", "user": user}
     return {"status": "error"}
 
+# ★ 新增：解除綁定 API (測試用)
+@app.get("/api/unbind/{user_id}")
+def unbind_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user:
+        user.line_id = f"test_unbound_{user.id}" # 把 LINE ID 變回空帳號的格式
+        db.commit()
+        return {"status": "success"}
+    return {"status": "error"}
+    
 class TransactionCreate(BaseModel):
     user_id: int
     actor_id: int
