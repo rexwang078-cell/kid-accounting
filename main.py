@@ -200,6 +200,10 @@ def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, en
         print(f"Transactions Error: {e}")
         return []
 
+@app.get("/api/users/")
+def get_all_users(db: Session = Depends(get_db)):
+    return db.query(models.User).all()
+    
 @app.get("/api/stats/")
 def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
     try:
