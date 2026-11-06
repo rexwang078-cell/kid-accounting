@@ -3,10 +3,21 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import Column, Integer, String, Float, DateTime # 💡 匯入新欄位型態
 import models
 from database import engine, SessionLocal
-from datetime import datetime, timedelta # 💡 引入了 timedelta 來處理時差
+from datetime import datetime, timedelta
 import os
+
+# 💡 在這裡動態加入 Archive 歷史歸檔的資料表模型
+class Archive(models.Base):
+    __tablename__ = "archives"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer)
+    title = Column(String)
+    total_income = Column(Float)
+    total_expense = Column(Float)
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -87,6 +98,63 @@ class TransactionCreate(BaseModel):
 class BalanceUpdate(BaseModel):
     personal_balance: float
     deposited_balance: float
+    
+class ArchiveCreate(BaseModel):
+    user_id: int
+    actor_id: int
+    title: str
+    start_date: str
+    end_date: str
+
+# 💡 新增：處理歸檔結算的 API
+@app.post("/api/archive/")
+def create_archive(req: ArchiveCreate, db: Session = Depends(get_db)):
+    try:
+        actor = db.query(models.User).filter(models.User.id == req.actor_id).first()
+        if not actor or actor.role != 'parent':
+            return {"status": "error", "message": "只有家長可以執行歸檔！"}
+        
+        # 換算回 UTC 時間搜尋
+        dt_start = datetime.strptime(f"{req.start_date} 00:00:00", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
+        dt_end = datetime.strptime(f"{req.end_date} 23:59:59", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
+        
+        transactions = db.query(models.Transaction).filter(
+            models.Transaction.user_id == req.user_id, 
+            models.Transaction.status == 'completed', 
+            models.Transaction.timestamp >= dt_start, 
+            models.Transaction.timestamp <= dt_end
+        ).all()
+        
+        t_inc, t_exp = 0, 0
+        for t in transactions:
+            if t.type == 'expense': t_exp += t.amount
+            elif t.type in ['allowance', 'withdraw_deposit', 'deposit_income']: t_inc += t.amount
+            
+        new_archive = Archive(
+            user_id=req.user_id,
+            title=req.title,
+            total_income=t_inc,
+            total_expense=t_exp,
+            timestamp=datetime.utcnow()
+        )
+        db.add(new_archive)
+        db.commit()
+        return {"status": "success", "message": "結算歸檔成功！"}
+    except Exception as e:
+        return {"status": "error", "message": f"歸檔失敗: {str(e)}"}
+
+# 💡 新增：讀取歸檔紀錄的 API
+@app.get("/api/archives/")
+def get_archives(user_id: int = 0, db: Session = Depends(get_db)):
+    try:
+        query = db.query(Archive, models.User.name).join(models.User, Archive.user_id == models.User.id)
+        if user_id > 0:
+            query = query.filter(Archive.user_id == user_id)
+        archives = query.order_by(Archive.timestamp.desc()).all()
+        return [{"id": a.Archive.id, "user_name": a.name, "title": a.Archive.title, "total_income": a.Archive.total_income, "total_expense": a.Archive.total_expense, "timestamp": (a.Archive.timestamp + timedelta(hours=8)).strftime("%Y-%m-%d")} for a in archives]
+    except Exception as e:
+        print(f"Archive Error: {e}")
+        return []
 
 @app.post("/api/transaction/")
 def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db)):
@@ -136,7 +204,6 @@ def get_pending(user_id: int, db: Session = Depends(get_db)):
                 models.Transaction.status == 'pending', models.Transaction.type.in_(['allowance', 'withdraw_deposit']), models.Transaction.user_id == user.id
             ).all()
             
-        # 💡 將傳給前端的時間加上 8 小時 (台灣時間)
         return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": (r.Transaction.timestamp + timedelta(hours=8)).isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in pending]
     except Exception as e:
         print(f"Pending Error: {e}")
@@ -190,7 +257,6 @@ def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, en
         query = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id)
         if user_id > 0: query = query.filter(models.Transaction.user_id == user_id)
         
-        # 💡 將前端傳來的台灣時間查詢，扣除 8 小時轉回 UTC 時間向資料庫查詢
         if start_date:
             try:
                 dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S") - timedelta(hours=8)
@@ -203,7 +269,6 @@ def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, en
             except: pass
             
         records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(20).all()
-        # 💡 傳回前端前，再加上 8 小時
         return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": (r.Transaction.timestamp + timedelta(hours=8)).isoformat() if r.Transaction.timestamp else "", "user_name": r.name} for r in records]
     except Exception as e:
         print(f"Transactions Error: {e}")
@@ -230,7 +295,6 @@ def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depend
         total_expense, total_allowance = 0, 0
         for t in transactions:
             if not t.timestamp: continue
-            # 💡 統計每天數據時，也必須轉回台灣時間才不會跨錯天
             local_time = t.timestamp + timedelta(hours=8)
             d = local_time.strftime("%Y-%m-%d")
             
