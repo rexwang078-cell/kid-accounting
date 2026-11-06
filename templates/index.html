@@ -145,13 +145,27 @@
         }
 
         window.onload = async () => {
-            try {
-                await liff.init({ liffId: MY_LIFF_ID });
-                if (!liff.isLoggedIn()) { liff.login(); return; }
-                lineProfile = await liff.getProfile();
-                checkAuth();
-            } catch (err) { showAppError("LINE 初始化失敗，請確認 LIFF ID：" + err.message); }
-        };
+    try {
+        alert("進度 1：網頁已載入，準備啟動 LINE SDK");
+        await liff.init({ liffId: MY_LIFF_ID });
+        
+        alert("進度 2：LINE SDK 啟動成功，檢查登入狀態");
+        if (!liff.isLoggedIn()) { 
+            alert("進度 3：未登入，即將跳轉驗證畫面");
+            liff.login(); 
+            return; 
+        }
+        
+        alert("進度 4：已登入，正在抓取您的 LINE 帳號資料");
+        lineProfile = await liff.getProfile();
+        
+        alert("進度 5：資料抓取成功，連線至記帳本伺服器...");
+        checkAuth();
+    } catch (err) { 
+        alert("⚠️ 發生錯誤：" + err.message);
+        showAppError("LINE 初始化失敗：" + err.message); 
+    }
+};
 
         async function checkAuth() {
             try {
