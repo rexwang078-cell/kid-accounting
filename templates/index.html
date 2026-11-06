@@ -93,7 +93,9 @@
                             <label class="form-label text-muted">動作</label>
                             <select class="form-select" id="typeChild">
                                 <option value="expense">支出 (扣個人餘額，不需確認)</option>
-                                <option value="deposit">存入寄放 (需家長確認收下)</option>
+                                <option value="deposit">把手邊的錢存入寄放 (扣個人餘額，需家長確認)</option>
+                                <!-- ★★★ 新增打工收入選項 ★★★ -->
+                                <option value="deposit_income">存入打工收入 (僅增加寄放，不扣手邊，需家長確認)</option>
                             </select>
                             <select class="form-select" id="typeParent" style="display: none;">
                                 <option value="allowance">給零用錢 (需小孩確認收下)</option>
@@ -158,9 +160,8 @@
         document.addEventListener("DOMContentLoaded", () => {
             initApp();
 
-            // ★★★ 新增：攔截表單送出，改用背景 API 呼叫，防止網頁重整 ★★★
             document.getElementById('recordForm').addEventListener('submit', async (e) => {
-                e.preventDefault(); // 阻止原本的網頁重整行為
+                e.preventDefault(); 
                 const submitBtn = document.getElementById('submitBtn');
                 submitBtn.disabled = true;
                 submitBtn.innerText = "⏳ 處理中...";
@@ -190,10 +191,10 @@
                     
                     const data = await res.json();
                     if (data.status === 'success') {
-                        alert(data.message); // 顯示成功訊息 (例如：等待確認中 或 記帳成功)
+                        alert(data.message); 
                         document.getElementById('recordAmount').value = '';
                         document.getElementById('recordNote').value = '';
-                        setupApp(); // 刷新畫面與餘額
+                        setupApp(); 
                     } else {
                         alert("錯誤：" + data.message);
                     }
@@ -316,7 +317,8 @@
                 if(pending.length > 0) {
                     box.style.display = 'block';
                     list.innerHTML = pending.map(p => {
-                        const tMap = { 'deposit': '存入寄放', 'allowance': '家長發零用錢', 'withdraw_deposit': '提領寄放' };
+                        // ★★★ 修改：讓新的交易類型也能正確顯示文字 ★★★
+                        const tMap = { 'deposit': '存入手邊餘額至寄放', 'deposit_income': '存入打工收入', 'allowance': '家長發零用錢', 'withdraw_deposit': '提領寄放' };
                         return `<li class="list-group-item"><div class="fw-bold mb-1">${p.user_name} - ${tMap[p.type]} $${p.amount}</div><div class="d-flex justify-content-between align-items-center"><div class="text-muted small">${p.note || '無備註'}</div><div><button class="btn btn-sm btn-success me-1" onclick="confirmTx(${p.id}, 'approve')">✅ 收到</button><button class="btn btn-sm btn-danger" onclick="confirmTx(${p.id}, 'reject')">❌ 拒絕</button></div></div></li>`;
                     }).join('');
                 } else { box.style.display = 'none'; }
@@ -363,7 +365,10 @@
                 let labels = [], incomeData = [], expenseData = [], curr = new Date(start);
                 while(curr <= new Date(end)) {
                     const dStr = formatDate(curr); labels.push(dStr.substring(5)); 
-                    incomeData.push(stats.daily[dStr] ? stats.daily[dStr].income : 0); expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
+                    // ★★★ 修改：將打工收入也算進統計圖表的「獲得」區塊 ★★★
+                    let dailyIn = (stats.daily[dStr] ? stats.daily[dStr].income : 0);
+                    incomeData.push(dailyIn); 
+                    expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
                     curr.setDate(curr.getDate() + 1);
                 }
                 if(chartInstance) chartInstance.destroy(); 
@@ -384,7 +389,15 @@
                 if(reset) { listElement.innerHTML = ''; currentLoadedCount = 0; }
                 if(reset && records.length === 0) { listElement.innerHTML = '<li class="list-group-item text-center text-muted">無紀錄</li>'; return; }
                 
-                const typeMap = { 'expense': { l: '支出', b: 'bg-danger', s: '-' }, 'deposit': { l: '存入寄放', b: 'bg-success', s: '+' }, 'allowance': { l: '獲零用錢', b: 'bg-primary', s: '+' }, 'withdraw_deposit': { l: '提領寄放', b: 'bg-warning text-dark', s: '+' }, 'adjustment': { l: '系統校正', b: 'bg-secondary', s: '' } };
+                // ★★★ 修改：為新的打工收入加入樣式映射 ★★★
+                const typeMap = { 
+                    'expense': { l: '支出', b: 'bg-danger', s: '-' }, 
+                    'deposit': { l: '手邊存入寄放', b: 'bg-success', s: '+' }, 
+                    'deposit_income': { l: '打工存入寄放', b: 'bg-success', s: '+' },
+                    'allowance': { l: '獲零用錢', b: 'bg-primary', s: '+' }, 
+                    'withdraw_deposit': { l: '提領寄放', b: 'bg-warning text-dark', s: '+' }, 
+                    'adjustment': { l: '系統校正', b: 'bg-secondary', s: '' } 
+                };
                 records.forEach(r => {
                     const t = typeMap[r.type];
                     let timeStr = "";
