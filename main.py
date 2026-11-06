@@ -23,7 +23,6 @@ def get_db():
 @app.get("/")
 def read_root(): return {"message": "API 運行中"}
 
-# ★ 新增：重置資料庫結構用
 @app.post("/api/system/reset_db/")
 def reset_db(db: Session = Depends(get_db)):
     models.Base.metadata.drop_all(bind=engine)
@@ -95,12 +94,9 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
     if actor.role == 'child' and transaction.user_id != actor.id:
         return {"status": "error", "message": "權限不足：你不能更改別人的帳戶！"}
 
-    # ★ 雙方確認邏輯
     needs_confirm = False
-    if transaction.type in ['deposit', 'withdraw_deposit']:
-        needs_confirm = True # 牽涉到寄放給家長，需要家長確認
-    elif transaction.type == 'allowance':
-        needs_confirm = True # 家長發零用錢，需要小孩確認收到
+    if transaction.type in ['deposit', 'withdraw_deposit']: needs_confirm = True
+    elif transaction.type == 'allowance': needs_confirm = True
 
     status_val = "pending" if needs_confirm else "completed"
 
@@ -110,7 +106,6 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
     )
     db.add(db_transaction)
     
-    # 只有狀態是 completed 的 (例如一般支出 expense)，才立刻扣款
     target_user = db.query(models.User).filter(models.User.id == transaction.user_id).first()
     if target_user and status_val == "completed":
         if transaction.type == 'expense': target_user.personal_balance -= transaction.amount
@@ -119,26 +114,22 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
     msg = "已送出請求，等待對方點擊確認！" if needs_confirm else "記帳成功！"
     return {"status": "success", "message": msg}
 
-# ★ 讀取待確認任務
 @app.get("/api/pending/{user_id}")
 def get_pending(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user: return []
     
     if user.role == 'parent':
-        # 家長負責確認：小孩存入(deposit) 與 小孩提領(withdraw_deposit)
         pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
             models.Transaction.status == 'pending', models.Transaction.type.in_(['deposit', 'withdraw_deposit'])
         ).all()
     else:
-        # 小孩負責確認：家長發放的零用錢(allowance)
         pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
             models.Transaction.status == 'pending', models.Transaction.type == 'allowance', models.Transaction.user_id == user.id
         ).all()
         
     return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in pending]
 
-# ★ 執行確認或拒絕
 @app.post("/api/confirm/{transaction_id}")
 def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(get_db)):
     t = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
@@ -149,7 +140,6 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
         db.commit()
         return {"status": "success"}
 
-    # 確認收下後，才真正變更餘額
     target_user = db.query(models.User).filter(models.User.id == t.user_id).first()
     if target_user:
         if t.type == 'deposit':
@@ -164,10 +154,6 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
     t.status = 'completed'
     db.commit()
     return {"status": "success"}
-
-class BalanceUpdate(BaseModel):
-    personal_balance: float
-    deposited_balance: float
 
 @app.put("/api/user/{user_id}/balance")
 def update_balance(user_id: int, actor_id: int, balances: BalanceUpdate, db: Session = Depends(get_db)):
@@ -188,26 +174,33 @@ def update_balance(user_id: int, actor_id: int, balances: BalanceUpdate, db: Ses
 def export_db(user_id: int, db: Session = Depends(get_db)):
     return {"status": "error", "message": "已使用雲端 PostgreSQL，請至 Neon 平台備份"}
 
+# ★★★ 修正點：轉換字串為 datetime 物件，以符合 PostgreSQL 要求 ★★★
 @app.get("/api/transactions/")
 def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
     query = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id)
     if user_id > 0: query = query.filter(models.Transaction.user_id == user_id)
-    if start_date: query = query.filter(models.Transaction.timestamp >= f"{start_date} 00:00:00")
-    if end_date: query = query.filter(models.Transaction.timestamp <= f"{end_date} 23:59:59")
+    
+    if start_date: 
+        dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+        query = query.filter(models.Transaction.timestamp >= dt_start)
+    if end_date: 
+        dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+        query = query.filter(models.Transaction.timestamp <= dt_end)
+        
     records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(20).all()
     return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in records]
 
-@app.get("/api/users/")
-def get_all_users(db: Session = Depends(get_db)):
-    return db.query(models.User).all()
-
+# ★★★ 修正點：轉換字串為 datetime 物件，以符合 PostgreSQL 要求 ★★★
 @app.get("/api/stats/")
 def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
+    dt_start = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+    dt_end = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+    
     query = db.query(models.Transaction).filter(
         models.Transaction.user_id == user_id, 
-        models.Transaction.status == 'completed', # ★ 只有完成的紀錄才算進統計
-        models.Transaction.timestamp >= f"{start_date} 00:00:00", 
-        models.Transaction.timestamp <= f"{end_date} 23:59:59"
+        models.Transaction.status == 'completed', 
+        models.Transaction.timestamp >= dt_start, 
+        models.Transaction.timestamp <= dt_end
     )
     transactions = query.order_by(models.Transaction.timestamp).all()
     daily_stats = {}
