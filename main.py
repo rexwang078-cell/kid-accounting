@@ -153,17 +153,18 @@ def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(
         return {"status": "success"}
 
     target_user = db.query(models.User).filter(models.User.id == t.user_id).first()
-if target_user:
-    if t.type == 'deposit':
-        target_user.personal_balance -= t.amount
-        target_user.deposited_balance += t.amount
-    elif t.type == 'allowance':
-        target_user.personal_balance += t.amount
-    elif t.type == 'withdraw_deposit':
-        target_user.personal_balance += t.amount
-        target_user.deposited_balance -= t.amount
-    elif t.type == 'deposit_income': # 💡 新增：打工收入只增加寄放餘額，不扣手邊餘額
-        target_user.deposited_balance += t.amount
+    # ▼▼▼ 已修正這裡的縮排問題 ▼▼▼
+    if target_user:
+        if t.type == 'deposit':
+            target_user.personal_balance -= t.amount
+            target_user.deposited_balance += t.amount
+        elif t.type == 'allowance':
+            target_user.personal_balance += t.amount
+        elif t.type == 'withdraw_deposit':
+            target_user.personal_balance += t.amount
+            target_user.deposited_balance -= t.amount
+        elif t.type == 'deposit_income': # 💡 新增：打工收入只增加寄放餘額，不扣手邊餘額
+            target_user.deposited_balance += t.amount
             
     t.status = 'completed'
     db.commit()
@@ -231,7 +232,7 @@ def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depend
             d = t.timestamp.strftime("%Y-%m-%d")
             if d not in daily_stats: daily_stats[d] = {"income": 0, "expense": 0}
             if t.type == 'expense': daily_stats[d]["expense"] += t.amount; total_expense += t.amount
-            elif t.type in ['allowance', 'withdraw_deposit']: daily_stats[d]["income"] += t.amount; total_allowance += t.amount
+            elif t.type in ['allowance', 'withdraw_deposit', 'deposit_income']: daily_stats[d]["income"] += t.amount; total_allowance += t.amount
         return {"total_allowance": total_allowance, "total_expense": total_expense, "daily": daily_stats}
     except Exception as e:
         print(f"Stats Error: {e}")
