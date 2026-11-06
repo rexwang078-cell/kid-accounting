@@ -11,7 +11,6 @@
 </head>
 <body>
     <div class="app-container">
-        
         <!-- 登入與綁定畫面 -->
         <div id="authSection" class="text-center py-5">
             <div class="spinner-border text-primary mb-3" role="status" id="loadingSpinner"></div>
@@ -24,22 +23,20 @@
             </div>
         </div>
 
-        <!-- 主系統畫面 (登入後顯示) -->
+        <!-- 主系統畫面 -->
         <div id="mainApp" style="display:none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h3 class="m-0">📝 記帳本</h3>
                 <div>
                     <span id="loggedInName" class="badge bg-primary fs-6 py-2 px-3 me-1"></span>
-                    <button class="btn btn-sm btn-outline-danger" onclick="unbindMe()">登出</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="unbindMe()">登出測試</button>
                 </div>
-            </div>>
+            </div>
 
-            <!-- ★ 新增：小孩互看選單 (大人隱藏) -->
             <div id="childViewSwitcher" class="mb-3" style="display: none;">
                 <select id="viewingChild" class="form-select border-info text-info fw-bold bg-info bg-opacity-10"></select>
             </div>
 
-            <!-- 小孩專屬：狀態與統計 -->
             <div id="childDashboard" style="display: none;">
                 <div class="card shadow-sm mb-3 border-info">
                     <div class="card-body p-3 text-center">
@@ -56,134 +53,85 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="card shadow-sm mb-4">
-                    <div class="card-body p-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="text-secondary fw-bold m-0">📊 收支統計</h6>
-                            <div>
-                                <button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(7)">近 7 天</button>
-                                <button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(30)">近 30 天</button>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2 mb-3">
-                            <input type="date" id="statStartDate" class="form-control form-control-sm">
-                            <span class="align-self-center">~</span>
-                            <input type="date" id="statEndDate" class="form-control form-control-sm">
-                            <button class="btn btn-sm btn-primary" onclick="loadStats()">查詢</button>
-                        </div>
-                        <div class="row text-center mb-2">
-                            <div class="col-6"><small class="text-muted">期間獲得</small><h6 class="text-primary mb-0" id="statIn">$0</h6></div>
-                            <div class="col-6"><small class="text-muted">期間花費</small><h6 class="text-danger mb-0" id="statOut">$0</h6></div>
-                        </div>
-                        <canvas id="statsChart" width="100%" height="60"></canvas>
-                    </div>
-                </div>
+                <!-- 統計圖表 (省略顯示節省空間，功能皆保留) -->
+                <div class="card shadow-sm mb-4"><div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="text-secondary fw-bold m-0">📊 收支統計 (已完成)</h6><div><button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(7)">近 7 天</button><button class="btn btn-sm btn-outline-primary" onclick="setStatsDate(30)">近 30 天</button></div></div>
+                    <div class="d-flex gap-2 mb-3"><input type="date" id="statStartDate" class="form-control form-control-sm"><span class="align-self-center">~</span><input type="date" id="statEndDate" class="form-control form-control-sm"><button class="btn btn-sm btn-primary" onclick="loadStats()">查詢</button></div>
+                    <div class="row text-center mb-2"><div class="col-6"><small class="text-muted">期間獲得</small><h6 class="text-primary mb-0" id="statIn">$0</h6></div><div class="col-6"><small class="text-muted">期間花費</small><h6 class="text-danger mb-0" id="statOut">$0</h6></div></div>
+                    <canvas id="statsChart" width="100%" height="60"></canvas>
+                </div></div>
             </div>
 
-            <!-- 家長專屬：代管總覽 -->
             <div id="parentDashboard" class="card shadow-sm mb-4 border-primary" style="display: none; background-color: #eef2ff;">
                 <div class="card-body">
                     <h5 class="card-title text-primary text-center mb-3">🛡️ 兒童帳戶總覽</h5>
                     <div class="row text-center" id="kidsBalances"></div>
-                    <div class="text-center mt-3 pt-3 border-top border-primary-subtle">
-                        <button class="btn btn-sm btn-outline-primary" onclick="window.open(`/api/export_db/?user_id=${loggedInUser.id}`, '_blank')">💾 下載資料庫備份 (.db)</button>
-                    </div>
                 </div>
             </div>
             
-            <!-- 表單區塊 -->
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <form id="recordForm">
-                        <div class="mb-3" id="targetChildDiv" style="display: none;">
-                            <label class="form-label text-muted">發放對象</label>
-                            <select class="form-select" id="targetChild"></select>
-                        </div>
+                        <div class="mb-3" id="targetChildDiv" style="display: none;"><label class="form-label text-muted">發放對象</label><select class="form-select" id="targetChild"></select></div>
                         <div class="mb-3">
                             <label class="form-label text-muted">動作</label>
                             <select class="form-select" id="typeChild">
-                                <option value="expense">支出 (扣個人餘額)</option>
-                                <option value="deposit">存入 (增加寄放餘額)</option>
+                                <option value="expense">支出 (扣個人餘額，不需確認)</option>
+                                <option value="deposit">存入寄放 (需家長確認收下)</option>
                             </select>
                             <select class="form-select" id="typeParent" style="display: none;">
-                                <option value="allowance">給零用錢 (加個人餘額)</option>
-                                <option value="withdraw_deposit">領取寄放的錢 (扣寄放，加個人)</option>
+                                <option value="allowance">給零用錢 (需小孩確認收下)</option>
+                                <option value="withdraw_deposit">領取寄放的錢 (需家長確認發出)</option>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label text-muted">金額</label>
-                            <input type="number" class="form-control form-control-lg" id="recordAmount" placeholder="NT$ 0" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label text-muted">備註 / 項目</label>
-                            <input type="text" class="form-control" id="recordNote" placeholder="例如：買文具、發壓歲錢">
-                        </div>
+                        <div class="mb-3"><label class="form-label text-muted">金額</label><input type="number" class="form-control form-control-lg" id="recordAmount" placeholder="NT$ 0" required></div>
+                        <div class="mb-3"><label class="form-label text-muted">備註 / 項目</label><input type="text" class="form-control" id="recordNote" placeholder="例如：買文具、發壓歲錢"></div>
                         <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-100">確認送出</button>
                     </form>
                 </div>
             </div>
             
-            <!-- 流水帳 -->
+            <!-- ★ 新增：待確認任務區塊 -->
+            <div id="pendingSection" class="mb-4" style="display: none;">
+                <h5 class="text-warning m-0 mb-2">🔔 待確認任務</h5>
+                <ul class="list-group" id="pendingList"></ul>
+            </div>
+
             <div class="mb-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="text-secondary m-0">📋 近期紀錄</h5>
-                    <div>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="setListDate(7)">近 7 天</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="setListDate(30)">近 30 天</button>
-                    </div>
-                </div>
-                <div class="d-flex gap-2 mb-3">
-                    <input type="date" id="listStartDate" class="form-control form-control-sm">
-                    <input type="date" id="listEndDate" class="form-control form-control-sm">
-                    <button class="btn btn-sm btn-secondary" onclick="loadList(true)">篩選</button>
                 </div>
                 <ul class="list-group" id="transactionList"></ul>
-                <div class="text-center mt-3">
-                    <button id="loadMoreBtn" class="btn btn-outline-secondary btn-sm" style="display: none;">⬇️ 載入更多</button>
-                </div>
+                <div class="text-center mt-3"><button id="loadMoreBtn" class="btn btn-outline-secondary btn-sm" style="display: none;">⬇️ 載入更多</button></div>
             </div>
         </div>
     </div>
 
     <script>
-        // ★★★ 請把你在步驟 1 拿到的 LIFF ID 貼在引號裡面 ★★★
+        // ★★★ 請把你的 LIFF ID 貼在這裡 ★★★
         const MY_LIFF_ID = "2012416943-AdWqCrGD"; 
 
-        let loggedInUser = null;
-        let isParent = false;
-        let currentLoadedCount = 0;
-        let chartInstance = null; 
-        let allKids = [];
-        let lineProfile = null;
+        let loggedInUser = null, isParent = false, currentLoadedCount = 0, chartInstance = null, allKids = [], lineProfile = null;
 
-        // 1. 初始化 LINE 登入
         window.onload = async () => {
             try {
                 await liff.init({ liffId: MY_LIFF_ID });
                 if (!liff.isLoggedIn()) { liff.login(); return; }
                 lineProfile = await liff.getProfile();
                 checkAuth();
-            } catch (err) {
-                document.getElementById('loadingSpinner').style.display = 'none';
-                document.getElementById('authMessage').innerText = "❌ 系統初始化失敗，請確認 LIFF ID。";
-                console.error(err);
-            }
+            } catch (err) { console.error(err); }
         };
 
-        // 2. 檢查是否已經綁定過帳號
         async function checkAuth() {
             const res = await fetch(`/api/auth/${lineProfile.userId}`);
             const data = await res.json();
-
             if (data.status === 'unbound') {
                 document.getElementById('loadingSpinner').style.display = 'none';
                 document.getElementById('authMessage').style.display = 'none';
                 document.getElementById('bindSection').style.display = 'block';
                 loadUnboundUsers();
             } else {
-                loggedInUser = data;
-                isParent = (loggedInUser.role === 'parent');
+                loggedInUser = data; isParent = (loggedInUser.role === 'parent');
                 document.getElementById('authSection').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
                 document.getElementById('loggedInName').innerText = `👤 ${loggedInUser.name}`;
@@ -191,52 +139,45 @@
             }
         }
 
-        // 3. 載入還沒綁定的名單 (首次登入用)
         async function loadUnboundUsers() {
             const res = await fetch('/api/unbound_users/');
             const users = await res.json();
-            const box = document.getElementById('bindButtons');
-            box.innerHTML = users.map(u => `<button class="btn btn-outline-primary btn-lg" onclick="bindUser(${u.id})">我是 ${u.name}</button>`).join('');
-            if(users.length === 0) box.innerHTML = '<div class="alert alert-warning">所有帳號都已綁定完畢，請聯絡家長。</div>';
+            document.getElementById('bindButtons').innerHTML = users.map(u => `<button class="btn btn-outline-primary btn-lg" onclick="bindUser(${u.id})">我是 ${u.name}</button>`).join('');
+            if(users.length === 0) document.getElementById('bindButtons').innerHTML = '<div class="alert alert-warning">所有帳號都已綁定完畢。若要測試請點選首頁的登出。</div>';
         }
 
-        // 4. 綁定按鈕動作
         async function bindUser(userId) {
-            const res = await fetch('/api/bind/', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ line_id: lineProfile.userId, user_id: userId })
-            });
-            const data = await res.json();
-            if (data.status === 'success') checkAuth(); // 綁定成功，重新檢查並進入主畫面
-            else alert("綁定失敗，請重試");
+            const res = await fetch('/api/bind/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ line_id: lineProfile.userId, user_id: userId }) });
+            if ((await res.json()).status === 'success') checkAuth(); else alert("綁定失敗");
         }
 
-        // 5. 系統主邏輯初始化
+        async function unbindMe() {
+            if(confirm('確定要登出並重選身分嗎？')) {
+                await fetch(`/api/unbind/${loggedInUser.id}`);
+                if (liff.isLoggedIn()) liff.logout();
+                location.reload();
+            }
+        }
+
         async function setupApp() {
             const allRes = await fetch('/api/users/');
-            const allUsers = await allRes.json();
-            allKids = allUsers.filter(u => u.role === 'child');
-
+            allKids = (await allRes.json()).filter(u => u.role === 'child');
             document.getElementById('parentDashboard').style.display = isParent ? 'block' : 'none';
             document.getElementById('targetChildDiv').style.display = isParent ? 'block' : 'none';
             document.getElementById('typeParent').style.display = isParent ? 'block' : 'none';
             document.getElementById('typeChild').style.display = isParent ? 'none' : 'block';
             
             if (isParent) {
-                // 大人介面設定
                 document.getElementById('targetChild').innerHTML = allKids.map(k => `<option value="${k.id}">👦 ${k.name}</option>`).join('');
                 document.getElementById('kidsBalances').innerHTML = allKids.map(k => `
-                    <div class="col-6 border-end pb-2">
-                        <h6 class="text-secondary mb-1">${k.name}</h6>
-                        <div class="${k.personal_balance < 0 ? 'text-danger fw-bold' : 'text-dark'}">手邊: $${k.personal_balance}</div>
-                        <div class="text-success fw-bold">寄放: $${k.deposited_balance}</div>
-                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="editBalance(${k.id}, '${k.name}', ${k.personal_balance}, ${k.deposited_balance})">⚙️ 設定</button>
-                    </div>
-                `).join('');
+                    <div class="col-6 border-end pb-2"><h6 class="text-secondary mb-1">${k.name}</h6>
+                    <div class="${k.personal_balance < 0 ? 'text-danger fw-bold' : 'text-dark'}">手邊: $${k.personal_balance}</div>
+                    <div class="text-success fw-bold">寄放: $${k.deposited_balance}</div>
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="editBalance(${k.id}, '${k.name}', ${k.personal_balance}, ${k.deposited_balance})">⚙️ 設定</button></div>`).join('');
                 if(!document.getElementById('listStartDate').value) setListDate(7, false);
                 loadList(true);
+                loadPending();
             } else {
-                // ★ 小孩介面設定 (加入互看選單)
                 document.getElementById('childDashboard').style.display = 'block';
                 const switcherBox = document.getElementById('childViewSwitcher');
                 const switcher = document.getElementById('viewingChild');
@@ -246,55 +187,64 @@
                 refreshChildView();
             }
         }
-        // ★ 新增：登出與解除綁定邏輯
-        async function unbindMe() {
-            if(confirm('確定要解除綁定並登出嗎？這樣您可以重新選擇角色。')) {
-                await fetch(`/api/unbind/${loggedInUser.id}`);
-                if (liff.isLoggedIn()) {
-                    liff.logout(); // 清除 LINE 授權快取
-                }
-                location.reload();
-            }
-        }
-        
-        // ★ 核心邏輯：小孩切換查看對象
+
         function refreshChildView() {
             const targetId = parseInt(document.getElementById('viewingChild').value);
             const targetUser = allKids.find(k => k.id === targetId);
             const isMe = (targetId === loggedInUser.id);
-
-            // 更新上方餘額顯示
             document.getElementById('childNameTitle').innerText = `👤 ${targetUser.name}`;
-            const pb = document.getElementById('personalBalance');
-            pb.innerText = `$${targetUser.personal_balance}`;
-            pb.className = targetUser.personal_balance < 0 ? 'text-danger mb-0 fw-bold' : 'mb-0 fw-bold';
+            document.getElementById('personalBalance').innerText = `$${targetUser.personal_balance}`;
             document.getElementById('depositedBalance').innerText = `$${targetUser.deposited_balance}`;
-
-            // ★ 權限控管：如果不是看自己，鎖住表單
             document.getElementById('recordAmount').disabled = !isMe;
             document.getElementById('recordNote').disabled = !isMe;
             document.getElementById('typeChild').disabled = !isMe;
             const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = !isMe;
-            submitBtn.innerText = isMe ? '確認送出' : '🚫 僅供查看，無法幫別人記帳';
-            submitBtn.className = isMe ? 'btn btn-primary btn-lg w-100' : 'btn btn-secondary btn-lg w-100';
-
-            // 重新載入該對象的統計與清單
-            if(!document.getElementById('statStartDate').value) setStatsDate(7, false);
-            else loadStats();
+            submitBtn.disabled = !isMe; submitBtn.innerText = isMe ? '確認送出' : '🚫 僅供查看';
+            
+            if(!document.getElementById('statStartDate').value) setStatsDate(7, false); else loadStats();
             if(!document.getElementById('listStartDate').value) setListDate(7, false);
             loadList(true);
+            loadPending();
+        }
+
+        // ★ 載入與處理待確認任務
+        async function loadPending() {
+            const targetId = isParent ? loggedInUser.id : document.getElementById('viewingChild').value;
+            if(!isParent && targetId != loggedInUser.id) {
+                document.getElementById('pendingSection').style.display = 'none'; return;
+            }
+            const res = await fetch(`/api/pending/${loggedInUser.id}`);
+            const pending = await res.json();
+            const box = document.getElementById('pendingSection');
+            const list = document.getElementById('pendingList');
+            if(pending.length > 0) {
+                box.style.display = 'block';
+                list.innerHTML = pending.map(p => {
+                    const tMap = { 'deposit': '存入寄放', 'allowance': '家長給零用錢', 'withdraw_deposit': '提領寄放' };
+                    return `<li class="list-group-item">
+                        <div class="fw-bold mb-1">${p.user_name} - ${tMap[p.type]} $${p.amount}</div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-muted small">${p.note || '無備註'}</div>
+                            <div>
+                                <button class="btn btn-sm btn-success me-1" onclick="confirmTx(${p.id}, 'approve')">✅ 收到</button>
+                                <button class="btn btn-sm btn-danger" onclick="confirmTx(${p.id}, 'reject')">❌ 拒絕</button>
+                            </div>
+                        </div>
+                    </li>`;
+                }).join('');
+            } else { box.style.display = 'none'; }
+        }
+
+        async function confirmTx(id, action) {
+            await fetch(`/api/confirm/${id}?action=${action}`, { method: 'POST' });
+            setupApp(); 
         }
 
         async function editBalance(childId, childName, currentP, currentD) {
-            const newP = prompt(`請設定【${childName}】的新手邊餘額：`, currentP); if (newP === null) return;
-            const newD = prompt(`請設定【${childName}】的新寄放餘額：`, currentD); if (newD === null) return;
-            const res = await fetch(`/api/user/${childId}/balance?actor_id=${loggedInUser.id}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ personal_balance: parseFloat(newP), deposited_balance: parseFloat(newD) })
-            });
-            const data = await res.json();
-            if (data.status === 'success') { alert('✅ 成功！'); setupApp(); } else alert(data.message);
+            const newP = prompt(`設定【${childName}】新手邊餘額：`, currentP); if (newP === null) return;
+            const newD = prompt(`設定【${childName}】新寄放餘額：`, currentD); if (newD === null) return;
+            const res = await fetch(`/api/user/${childId}/balance?actor_id=${loggedInUser.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personal_balance: parseFloat(newP), deposited_balance: parseFloat(newD) }) });
+            if ((await res.json()).status === 'success') setupApp();
         }
 
         const formatDate = (date) => {
@@ -304,14 +254,12 @@
         }
         function setStatsDate(days, fetch=true) {
             const end = new Date(), start = new Date(); start.setDate(start.getDate() - days + 1);
-            document.getElementById('statStartDate').value = formatDate(start);
-            document.getElementById('statEndDate').value = formatDate(end);
+            document.getElementById('statStartDate').value = formatDate(start); document.getElementById('statEndDate').value = formatDate(end);
             if(fetch) loadStats();
         }
         function setListDate(days, fetch=true) {
             const end = new Date(), start = new Date(); start.setDate(start.getDate() - days + 1);
-            document.getElementById('listStartDate').value = formatDate(start);
-            document.getElementById('listEndDate').value = formatDate(end);
+            document.getElementById('listStartDate').value = formatDate(start); document.getElementById('listEndDate').value = formatDate(end);
             if(fetch) loadList(true);
         }
 
@@ -319,17 +267,13 @@
             if(isParent) return; 
             const targetId = parseInt(document.getElementById('viewingChild').value);
             const start = document.getElementById('statStartDate').value, end = document.getElementById('statEndDate').value;
-            const res = await fetch(`/api/stats/?user_id=${targetId}&start_date=${start}&end_date=${end}`);
-            const stats = await res.json();
-            document.getElementById('statIn').innerText = `$${stats.total_allowance}`;
-            document.getElementById('statOut').innerText = `$${stats.total_expense}`;
-            
+            const stats = await (await fetch(`/api/stats/?user_id=${targetId}&start_date=${start}&end_date=${end}`)).json();
+            document.getElementById('statIn').innerText = `$${stats.total_allowance}`; document.getElementById('statOut').innerText = `$${stats.total_expense}`;
             const ctx = document.getElementById('statsChart').getContext('2d');
             let labels = [], incomeData = [], expenseData = [], curr = new Date(start);
             while(curr <= new Date(end)) {
                 const dStr = formatDate(curr); labels.push(dStr.substring(5)); 
-                incomeData.push(stats.daily[dStr] ? stats.daily[dStr].income : 0);
-                expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
+                incomeData.push(stats.daily[dStr] ? stats.daily[dStr].income : 0); expenseData.push(stats.daily[dStr] ? stats.daily[dStr].expense : 0);
                 curr.setDate(curr.getDate() + 1);
             }
             if(chartInstance) chartInstance.destroy(); 
@@ -341,8 +285,7 @@
             const start = document.getElementById('listStartDate').value, end = document.getElementById('listEndDate').value;
             let url = `/api/transactions/?user_id=${listUid}&skip=${reset ? 0 : currentLoadedCount}`;
             if(start) url += `&start_date=${start}`; if(end) url += `&end_date=${end}`;
-            const transRes = await fetch(url);
-            const records = await transRes.json();
+            const records = await (await fetch(url)).json();
             
             const listElement = document.getElementById('transactionList');
             if(reset) { listElement.innerHTML = ''; currentLoadedCount = 0; }
@@ -352,10 +295,11 @@
             records.forEach(r => {
                 const t = typeMap[r.type], d = new Date(r.timestamp + 'Z'), timeStr = d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
                 const nameBadge = isParent ? `<span class="badge bg-info text-dark me-2">👤 ${r.user_name}</span>` : '';
-                listElement.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center"><div class="ms-2 me-auto"><div class="fw-bold mb-1">${nameBadge}<span class="badge ${t.b}">${t.l}</span> ${r.note || ''}</div><div class="text-muted" style="font-size: 0.85em;">🕒 ${timeStr}</div></div><span class="fs-5 fw-semibold ${r.type==='expense'?'text-danger':'text-success'}">${r.type==='adjustment'?'':t.s+' $'+r.amount}</span></li>`;
+                const statusBadge = r.status === 'pending' ? '<span class="badge bg-warning text-dark me-1">待確認</span>' : (r.status === 'rejected' ? '<span class="badge bg-secondary me-1">已拒絕</span>' : '');
+                listElement.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center"><div class="ms-2 me-auto"><div class="fw-bold mb-1">${statusBadge}${nameBadge}<span class="badge ${t.b}">${t.l}</span> ${r.note || ''}</div><div class="text-muted" style="font-size: 0.85em;">🕒 ${timeStr}</div></div><span class="fs-5 fw-semibold ${r.type==='expense'?'text-danger':'text-success'}">${r.type==='adjustment'?'':t.s+' $'+r.amount}</span></li>`;
             });
             currentLoadedCount += records.length;
-            document.getElementById('loadMoreBtn').style.display = records.length === 15 ? 'inline-block' : 'none';
+            document.getElementById('loadMoreBtn').style.display = records.length === 20 ? 'inline-block' : 'none';
         }
 
         document.getElementById('loadMoreBtn').addEventListener('click', () => loadList(false));
@@ -368,7 +312,8 @@
                 body: JSON.stringify({ user_id: parseInt(target_id), actor_id: loggedInUser.id, type: type, amount: parseFloat(document.getElementById('recordAmount').value), note: document.getElementById('recordNote').value })
             });
             const data = await res.json();
-            if (data.status === 'error') alert(data.message); else { document.getElementById('recordForm').reset(); setupApp(); }
+            alert(data.message);
+            if (data.status === 'success') { document.getElementById('recordForm').reset(); setupApp(); }
         });
     </script>
 </body>
