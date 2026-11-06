@@ -113,6 +113,42 @@
                 <ul class="list-group" id="pendingList"></ul>
             </div>
 
+            <!-- ★★★ 新增：歷史歸檔紀錄區塊 ★★★ -->
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="text-secondary m-0">📁 歷史歸檔紀錄</h5>
+                </div>
+                
+                <!-- 家長專屬：產生歸檔工具 -->
+                <div id="archiveControlParent" class="card shadow-sm mb-3 border-secondary" style="display: none; background-color: #fcfcfc;">
+                    <div class="card-body p-3">
+                        <h6 class="text-primary mb-3">📝 新增結算歸檔 (家長專用)</h6>
+                        <div class="mb-2">
+                            <label class="form-label text-muted small m-0">歸檔對象</label>
+                            <select class="form-select form-select-sm" id="archiveTargetChild"></select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-muted small m-0">結算區間</label>
+                            <div class="d-flex gap-2">
+                                <input type="date" id="archiveStartDate" class="form-control form-control-sm">
+                                <span class="align-self-center text-muted">~</span>
+                                <input type="date" id="archiveEndDate" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label text-muted small m-0">歸檔名稱</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" id="archiveTitle" class="form-control" placeholder="例：大寶 10月份結算">
+                                <button class="btn btn-primary" onclick="createArchive(event)">產生歸檔</button>
+                            </div>
+                        </div>
+                        <small class="text-muted" style="font-size: 0.75rem;">系統會自動加總設定區間內的花費與獲得，並存成一筆固定紀錄供日後查詢。</small>
+                    </div>
+                </div>
+                <!-- 歸檔列表顯示區 -->
+                <ul class="list-group" id="archiveList"></ul>
+            </div>
+
             <div class="mb-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="text-secondary m-0">📋 近期紀錄</h5>
@@ -193,7 +229,7 @@
                         alert(data.message); 
                         document.getElementById('recordAmount').value = '';
                         document.getElementById('recordNote').value = '';
-                        setupApp(); // 記帳成功後重新讀取畫面
+                        setupApp(); 
                     } else {
                         alert("錯誤：" + data.message);
                     }
@@ -260,7 +296,16 @@
                 document.getElementById('typeChild').style.display = isParent ? 'none' : 'block';
                 
                 if (isParent) {
-                    document.getElementById('targetChild').innerHTML = allKids.map(k => `<option value="${k.id}">👦 ${k.name}</option>`).join('');
+                    const childOptions = allKids.map(k => `<option value="${k.id}">👦 ${k.name}</option>`).join('');
+                    document.getElementById('targetChild').innerHTML = childOptions;
+                    
+                    // 💡 給家長的歸檔工具選項與預設日期
+                    document.getElementById('archiveTargetChild').innerHTML = childOptions;
+                    document.getElementById('archiveControlParent').style.display = 'block';
+                    const end = new Date(), start = new Date(); start.setDate(1); 
+                    document.getElementById('archiveStartDate').value = formatDate(start); 
+                    document.getElementById('archiveEndDate').value = formatDate(end);
+                    
                     document.getElementById('kidsBalances').innerHTML = allKids.map(k => `
                         <div class="col-6 border-end pb-2"><h6 class="text-secondary mb-1">${k.name}</h6>
                         <div class="${k.personal_balance < 0 ? 'text-danger fw-bold' : 'text-dark'}">手邊: $${k.personal_balance}</div>
@@ -269,6 +314,7 @@
                     if(!document.getElementById('listStartDate').value) setListDate(7, false);
                     loadList(true);
                     loadPending();
+                    loadArchives(); // 家長載入全部歸檔
                 } else {
                     document.getElementById('childDashboard').style.display = 'block';
                     document.getElementById('childViewSwitcher').style.display = 'block';
@@ -296,13 +342,72 @@
                 const submitBtn = document.getElementById('submitBtn');
                 submitBtn.disabled = !isMe; submitBtn.innerText = isMe ? '確認送出' : '🚫 僅供查看';
                 
-                // ★★★ 修正這裡：改為 true，確保載入時自動拉取圖表資料 ★★★
                 if(!document.getElementById('statStartDate').value) setStatsDate(7, true); else loadStats();
-                
                 if(!document.getElementById('listStartDate').value) setListDate(7, false);
                 loadList(true);
                 loadPending();
+                loadArchives(); // 切換小孩時載入該位小孩的歸檔
             } catch (e) { showAppError("切換身分時發生錯誤: " + e.message); }
+        }
+
+        // 💡 新增：產生結算歸檔的函式
+        async function createArchive(event) {
+            const tId = document.getElementById('archiveTargetChild').value;
+            const sDate = document.getElementById('archiveStartDate').value;
+            const eDate = document.getElementById('archiveEndDate').value;
+            const title = document.getElementById('archiveTitle').value;
+
+            if(!tId || !sDate || !eDate || !title) {
+                alert("請填寫完整歸檔資訊！"); return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = "處理中...";
+
+            try {
+                const res = await fetch('/api/archive/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: parseInt(tId), actor_id: loggedInUser.id, title: title, start_date: sDate, end_date: eDate })
+                });
+                const data = await res.json();
+                if(data.status === 'success') {
+                    alert("歸檔成功！");
+                    document.getElementById('archiveTitle').value = "";
+                    loadArchives(); // 重新讀取清單
+                } else {
+                    alert(data.message);
+                }
+            } catch(e) { alert("連線錯誤: "+e.message); }
+            finally { btn.disabled = false; btn.innerText = "產生歸檔"; }
+        }
+
+        // 💡 新增：讀取歸檔清單的函式
+        async function loadArchives() {
+            try {
+                const listUid = isParent ? 0 : document.getElementById('viewingChild').value;
+                const res = await fetch(`/api/archives/?user_id=${listUid}`);
+                const archives = await res.json();
+                const listElement = document.getElementById('archiveList');
+                if(archives.length === 0) {
+                    listElement.innerHTML = '<li class="list-group-item text-center text-muted">無歸檔紀錄</li>';
+                    return;
+                }
+                listElement.innerHTML = archives.map(a => {
+                    const nameBadge = isParent ? `<span class="badge bg-info text-dark me-2">👤 ${a.user_name}</span>` : '';
+                    return `<li class="list-group-item bg-light">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-bold text-dark fs-6">${nameBadge}${a.title}</div>
+                            <span class="badge bg-secondary">結算於: ${a.timestamp}</span>
+                        </div>
+                        <div class="row text-center bg-white p-2 rounded shadow-sm">
+                            <div class="col-6 border-end"><small class="text-muted">期間總獲得</small><br><span class="text-primary fw-bold">$${a.total_income}</span></div>
+                            <div class="col-6"><small class="text-muted">期間總花費</small><br><span class="text-danger fw-bold">$${a.total_expense}</span></div>
+                        </div>
+                    </li>`;
+                }).join('');
+            } catch(e) { console.error("Archive load error", e); }
         }
 
         async function loadPending() {
