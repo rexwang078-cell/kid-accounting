@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import models
 from database import engine, SessionLocal
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 
 models.Base.metadata.create_all(bind=engine)
@@ -22,6 +22,13 @@ def get_db():
 
 @app.get("/")
 def read_root(): return {"message": "API 運行中"}
+
+# ★ 新增：重置資料庫結構用
+@app.post("/api/system/reset_db/")
+def reset_db(db: Session = Depends(get_db)):
+    models.Base.metadata.drop_all(bind=engine)
+    models.Base.metadata.create_all(bind=engine)
+    return {"message": "資料表已更新並重置，請緊接著執行 /init_users/ 建立初始帳號。"}
 
 @app.post("/init_users/")
 def init_users(db: Session = Depends(get_db)):
@@ -40,18 +47,15 @@ def init_users(db: Session = Depends(get_db)):
 def read_ui(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
-# ★ 新增：檢查 LINE ID 是否已綁定
 @app.get("/api/auth/{line_id}")
 def check_auth(line_id: str, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.line_id == line_id).first()
     return user if user else {"status": "unbound"}
 
-# ★ 新增：抓取還沒綁定 LINE 的空帳號
 @app.get("/api/unbound_users/")
 def get_unbound(db: Session = Depends(get_db)):
     return db.query(models.User).filter(models.User.line_id.like("test_%")).all()
 
-# ★ 新增：首次登入時綁定身分
 class BindRequest(BaseModel):
     line_id: str
     user_id: int
@@ -65,16 +69,15 @@ def bind_user(req: BindRequest, db: Session = Depends(get_db)):
         return {"status": "success", "user": user}
     return {"status": "error"}
 
-# ★ 新增：解除綁定 API (測試用)
 @app.get("/api/unbind/{user_id}")
 def unbind_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user:
-        user.line_id = f"test_unbound_{user.id}" # 把 LINE ID 變回空帳號的格式
+        user.line_id = f"test_unbound_{user.id}"
         db.commit()
         return {"status": "success"}
     return {"status": "error"}
-    
+
 class TransactionCreate(BaseModel):
     user_id: int
     actor_id: int
@@ -87,29 +90,78 @@ def create_transaction(transaction: TransactionCreate, db: Session = Depends(get
     actor = db.query(models.User).filter(models.User.id == transaction.actor_id).first()
     if not actor: return {"status": "error", "message": "無效的使用者"}
 
-    # ★ 權限防護 1：小孩不能執行大人的動作
     if actor.role == 'child' and transaction.type in ['allowance', 'withdraw_deposit']:
         return {"status": "error", "message": "權限不足：小孩無法執行大人的動作！"}
-    
-    # ★ 權限防護 2：小孩不能幫別人記帳
     if actor.role == 'child' and transaction.user_id != actor.id:
         return {"status": "error", "message": "權限不足：你不能更改別人的帳戶！"}
 
+    # ★ 雙方確認邏輯
+    needs_confirm = False
+    if transaction.type in ['deposit', 'withdraw_deposit']:
+        needs_confirm = True # 牽涉到寄放給家長，需要家長確認
+    elif transaction.type == 'allowance':
+        needs_confirm = True # 家長發零用錢，需要小孩確認收到
+
+    status_val = "pending" if needs_confirm else "completed"
+
     db_transaction = models.Transaction(
         user_id=transaction.user_id, actor_id=transaction.actor_id,
-        type=transaction.type, amount=transaction.amount, note=transaction.note
+        type=transaction.type, amount=transaction.amount, note=transaction.note, status=status_val
     )
     db.add(db_transaction)
     
+    # 只有狀態是 completed 的 (例如一般支出 expense)，才立刻扣款
     target_user = db.query(models.User).filter(models.User.id == transaction.user_id).first()
-    if target_user:
+    if target_user and status_val == "completed":
         if transaction.type == 'expense': target_user.personal_balance -= transaction.amount
-        elif transaction.type == 'deposit': target_user.deposited_balance += transaction.amount
-        elif transaction.type == 'allowance': target_user.personal_balance += transaction.amount
-        elif transaction.type == 'withdraw_deposit':
-            target_user.personal_balance += transaction.amount
-            target_user.deposited_balance -= transaction.amount
             
+    db.commit()
+    msg = "已送出請求，等待對方點擊確認！" if needs_confirm else "記帳成功！"
+    return {"status": "success", "message": msg}
+
+# ★ 讀取待確認任務
+@app.get("/api/pending/{user_id}")
+def get_pending(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user: return []
+    
+    if user.role == 'parent':
+        # 家長負責確認：小孩存入(deposit) 與 小孩提領(withdraw_deposit)
+        pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
+            models.Transaction.status == 'pending', models.Transaction.type.in_(['deposit', 'withdraw_deposit'])
+        ).all()
+    else:
+        # 小孩負責確認：家長發放的零用錢(allowance)
+        pending = db.query(models.Transaction, models.User.name).join(models.User, models.Transaction.user_id == models.User.id).filter(
+            models.Transaction.status == 'pending', models.Transaction.type == 'allowance', models.Transaction.user_id == user.id
+        ).all()
+        
+    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in pending]
+
+# ★ 執行確認或拒絕
+@app.post("/api/confirm/{transaction_id}")
+def confirm_transaction(transaction_id: int, action: str, db: Session = Depends(get_db)):
+    t = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    if not t or t.status != 'pending': return {"status": "error"}
+
+    if action == 'reject':
+        t.status = 'rejected'
+        db.commit()
+        return {"status": "success"}
+
+    # 確認收下後，才真正變更餘額
+    target_user = db.query(models.User).filter(models.User.id == t.user_id).first()
+    if target_user:
+        if t.type == 'deposit':
+            target_user.personal_balance -= t.amount
+            target_user.deposited_balance += t.amount
+        elif t.type == 'allowance':
+            target_user.personal_balance += t.amount
+        elif t.type == 'withdraw_deposit':
+            target_user.personal_balance += t.amount
+            target_user.deposited_balance -= t.amount
+            
+    t.status = 'completed'
     db.commit()
     return {"status": "success"}
 
@@ -124,8 +176,8 @@ def update_balance(user_id: int, actor_id: int, balances: BalanceUpdate, db: Ses
 
     target_user = db.query(models.User).filter(models.User.id == user_id).first()
     if target_user:
-        note_str = f"⚙️ 家長校正餘額：手邊改為 ${balances.personal_balance}, 寄放改為 ${balances.deposited_balance}"
-        db.add(models.Transaction(user_id=user_id, actor_id=actor_id, type='adjustment', amount=0, note=note_str))
+        note_str = f"⚙️ 家長校正餘額：手邊 ${balances.personal_balance}, 寄放 ${balances.deposited_balance}"
+        db.add(models.Transaction(user_id=user_id, actor_id=actor_id, type='adjustment', amount=0, note=note_str, status='completed'))
         target_user.personal_balance = balances.personal_balance
         target_user.deposited_balance = balances.deposited_balance
         db.commit()
@@ -134,11 +186,7 @@ def update_balance(user_id: int, actor_id: int, balances: BalanceUpdate, db: Ses
 
 @app.get("/api/export_db/")
 def export_db(user_id: int, db: Session = Depends(get_db)):
-    actor = db.query(models.User).filter(models.User.id == user_id).first()
-    if not actor or actor.role != 'parent': return {"status": "error", "message": "權限不足"}
-    if os.path.exists("kid_accounting.db"):
-        return FileResponse("kid_accounting.db", media_type="application/octet-stream", filename="kid_accounting_backup.db")
-    return {"status": "error"}
+    return {"status": "error", "message": "已使用雲端 PostgreSQL，請至 Neon 平台備份"}
 
 @app.get("/api/transactions/")
 def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
@@ -146,8 +194,8 @@ def get_transactions(user_id: int = 0, skip: int = 0, start_date: str = None, en
     if user_id > 0: query = query.filter(models.Transaction.user_id == user_id)
     if start_date: query = query.filter(models.Transaction.timestamp >= f"{start_date} 00:00:00")
     if end_date: query = query.filter(models.Transaction.timestamp <= f"{end_date} 23:59:59")
-    records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(15).all()
-    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in records]
+    records = query.order_by(models.Transaction.timestamp.desc()).offset(skip).limit(20).all()
+    return [{"id": r.Transaction.id, "type": r.Transaction.type, "amount": r.Transaction.amount, "note": r.Transaction.note, "status": r.Transaction.status, "timestamp": r.Transaction.timestamp, "user_name": r.name} for r in records]
 
 @app.get("/api/users/")
 def get_all_users(db: Session = Depends(get_db)):
@@ -155,7 +203,12 @@ def get_all_users(db: Session = Depends(get_db)):
 
 @app.get("/api/stats/")
 def get_stats(user_id: int, start_date: str, end_date: str, db: Session = Depends(get_db)):
-    query = db.query(models.Transaction).filter(models.Transaction.user_id == user_id, models.Transaction.timestamp >= f"{start_date} 00:00:00", models.Transaction.timestamp <= f"{end_date} 23:59:59")
+    query = db.query(models.Transaction).filter(
+        models.Transaction.user_id == user_id, 
+        models.Transaction.status == 'completed', # ★ 只有完成的紀錄才算進統計
+        models.Transaction.timestamp >= f"{start_date} 00:00:00", 
+        models.Transaction.timestamp <= f"{end_date} 23:59:59"
+    )
     transactions = query.order_by(models.Transaction.timestamp).all()
     daily_stats = {}
     total_expense, total_allowance = 0, 0
