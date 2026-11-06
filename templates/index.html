@@ -112,7 +112,6 @@
                 <ul class="list-group" id="pendingList"></ul>
             </div>
 
-            <!-- ★★★ 補回之前不小心漏掉的近期紀錄日期篩選框 ★★★ -->
             <div class="mb-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="text-secondary m-0">📋 近期紀錄</h5>
@@ -133,9 +132,7 @@
     </div>
 
     <script>
-        // ★★★ 請把你的 LIFF ID 貼在這裡 ★★★
         const MY_LIFF_ID = "2012416943-AdWqCrGD"; 
-
         let loggedInUser = null, isParent = false, currentLoadedCount = 0, chartInstance = null, allKids = [], lineProfile = null;
 
         function showAppError(msg) {
@@ -144,28 +141,38 @@
             eb.innerText = "系統錯誤: " + msg;
         }
 
-        window.onload = async () => {
-    try {
-        console.log("進度 1：網頁已載入，準備啟動 LINE SDK");
-        await liff.init({ liffId: MY_LIFF_ID });
-        
-        console.log("進度 2：LINE SDK 啟動成功，檢查登入狀態");
-        if (!liff.isLoggedIn()) { 
-            console.log("進度 3：未登入，即將跳轉驗證畫面");
-            liff.login(); 
-            return; 
+        // 確保 script 區塊有被執行到的保險機制
+        console.log("✅ 網頁腳本區塊已成功載入解析！");
+
+        // 將原本的 window.onload 改成獨立函式
+        async function initApp() {
+            try {
+                console.log("進度 1：準備啟動 LINE SDK");
+                await liff.init({ liffId: MY_LIFF_ID });
+                
+                console.log("進度 2：LINE SDK 啟動成功，檢查登入狀態");
+                if (!liff.isLoggedIn()) { 
+                    console.log("進度 3：未登入，即將跳轉驗證畫面");
+                    liff.login(); 
+                    return; 
+                }
+                
+                console.log("進度 4：已登入，正在抓取您的 LINE 帳號資料");
+                lineProfile = await liff.getProfile();
+                
+                console.log("進度 5：資料抓取成功，連線至記帳本伺服器...");
+                checkAuth();
+            } catch (err) { 
+                console.error("⚠️ 發生錯誤：" + err.message);
+                showAppError("LINE 初始化失敗：" + err.message); 
+            }
         }
-        
-        console.log("進度 4：已登入，正在抓取您的 LINE 帳號資料");
-        lineProfile = await liff.getProfile();
-        
-        console.log("進度 5：資料抓取成功，連線至記帳本伺服器...");
-        checkAuth();
-    } catch (err) { 
-        console.error("⚠️ 發生錯誤：" + err.message);
-        showAppError("LINE 初始化失敗：" + err.message); 
-    }
-};
+
+        // 使用 DOMContentLoaded 確保在 HTML 載入完畢後立刻執行，避免被其他套件覆蓋
+        document.addEventListener("DOMContentLoaded", () => {
+            console.log("✅ DOM 載入完畢，開始執行 initApp...");
+            initApp();
+        });
 
         async function checkAuth() {
             try {
@@ -358,3 +365,6 @@
                 document.getElementById('loadMoreBtn').style.display = records.length === 20 ? 'inline-block' : 'none';
             } catch (e) { showAppError("讀取紀錄失敗: " + e.message); }
         }
+    </script>
+</body>
+</html>
