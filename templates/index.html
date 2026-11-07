@@ -188,7 +188,30 @@
                 lineProfile = await liff.getProfile();
                 checkAuth();
             } catch (err) { 
-                showAppError("LINE 初始化失敗：" + err.message); 
+                const errMsg = err.message || "";
+                
+                // ★ 自動處理 Token 失效的防呆機制 ★
+                if (errMsg.includes("access token revoked") || errMsg.includes("expired")) {
+                    // 1. 隱藏原本的錯誤橫幅，改在載入畫面顯示提示
+                    document.getElementById('errorBanner').style.display = 'none';
+                    const authMsg = document.getElementById('authMessage');
+                    if (authMsg) {
+                        authMsg.style.display = 'block';
+                        authMsg.className = 'text-warning mt-3';
+                        authMsg.innerText = "⏳ 登入憑證已過期，系統自動為您重新連線中...";
+                    }
+                    
+                    // 2. 清除瀏覽器內無效的快取 Token
+                    try { liff.logout(); } catch(e) {}
+                    
+                    // 3. 稍等 1.5 秒後自動重整網頁，觸發全新的登入授權
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    // 若是其他未知錯誤，則照常顯示紅色的錯誤警告
+                    showAppError("LINE 初始化失敗：" + errMsg); 
+                }
             }
         }
 
